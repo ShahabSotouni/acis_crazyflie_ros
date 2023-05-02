@@ -96,7 +96,7 @@ class CFLogger:
         # print()
         msg.header.stamp.secs = rospy.Time.now().secs
         msg.header.stamp.nsecs = rospy.Time.now().nsecs
-        msg.header.frame_id = "cf1/lh"
+        msg.header.frame_id = 'map'
         msg.pose.position.x = data["stateEstimate.x"]
         msg.pose.position.y = data["stateEstimate.y"]
         msg.pose.position.z = data["stateEstimate.z"]
@@ -145,25 +145,25 @@ def reader():
     
     # while not rospy.is_shutdown():
     
-    msg = PoseStamped()
+    # msg = PoseStamped()
     
-    msg.header.stamp.secs = rospy.Time.now().secs
-    msg.header.stamp.nsecs = rospy.Time.now().nsecs
-    msg.header.frame_id = "cf1/lh"
-    msg.pose.position.x = 0.0
-    msg.pose.position.y = 0.0
-    msg.pose.position.z = 0.0
-    msg.pose.orientation.w = 1.0
-    msg.pose.orientation.x = 0.0
-    msg.pose.orientation.y = 0.0
-    msg.pose.orientation.z = 0.0
+    # msg.header.stamp.secs = rospy.Time.now().secs
+    # msg.header.stamp.nsecs = rospy.Time.now().nsecs
+    # msg.header.frame_id = "cf1/lh"
+    # msg.pose.position.x = 0.0
+    # msg.pose.position.y = 0.0
+    # msg.pose.position.z = 0.0
+    # msg.pose.orientation.w = 1.0
+    # msg.pose.orientation.x = 0.0
+    # msg.pose.orientation.y = 0.0
+    # msg.pose.orientation.z = 0.0
     
-    print(msg)   
+    # print(msg)   
         
-    #     info_str = "cf2: %s" % rospy.get_time()
-    #     rospy.loginfo(info_str)
-    pub.publish(msg)
-    #     rate.sleep()
+    # #     info_str = "cf2: %s" % rospy.get_time()
+    # #     rospy.loginfo(info_str)
+    # pub.publish(msg)
+    # #     rate.sleep()
     
     # spin() simply keeps python from exiting until this node is stopped
     rospy.spin()
