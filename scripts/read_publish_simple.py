@@ -96,7 +96,7 @@ class CFLogger:
         # print()
         msg.header.stamp.secs = rospy.Time.now().secs
         msg.header.stamp.nsecs = rospy.Time.now().nsecs
-        msg.header.frame_id = 'map'
+        msg.header.frame_id = 'parent_crazyflie_frame'
         msg.pose.position.x = data["stateEstimate.x"]
         msg.pose.position.y = data["stateEstimate.y"]
         msg.pose.position.z = data["stateEstimate.z"]

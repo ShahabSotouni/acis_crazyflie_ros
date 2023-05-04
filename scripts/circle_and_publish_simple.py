@@ -71,9 +71,10 @@ class CFLogger:
 
     # Get Publisher handle from ROS
 
-    def __init__(self, link_uri, pub):
+    def __init__(self, link_uri, pub,carrot_pub):
         """Initialize and run the example with the specified link_uri"""
         self.pub = pub
+        self.carrot_pub = carrot_pub
         self._cf = Crazyflie(rw_cache="./cache")
         self.scf = SyncCrazyflie(link_uri, self._cf)
         # create carrot generator instance
@@ -173,7 +174,7 @@ class CFLogger:
         # print()
         msg.header.stamp.secs = rospy.Time.now().secs
         msg.header.stamp.nsecs = rospy.Time.now().nsecs
-        msg.header.frame_id = "cf1/lh"
+        msg.header.frame_id = "parent_crazyflie_frame"
         x = msg.pose.position.x = data["stateEstimate.x"]
         y = msg.pose.position.y = data["stateEstimate.y"]
         z = msg.pose.position.z = data["stateEstimate.z"]
@@ -184,36 +185,26 @@ class CFLogger:
         self.pub.publish(msg)
         carrot = self.cg.generate_carrot()
         carrot[2] = carrot[2] + 1.0
-        saturate = lambda x, a, b: min(max(x, a), b)
-        # vx_cmd = saturate(
-        #     (carrot[0] - x) * self.p_horizontal,
-        #     -self.max_vel_horizontal,
-        #     self.max_vel_horizontal,
-        # )  # X velocity command
-        # vy_cmd = saturate(
-        #     (carrot[1] - y) * self.p_horizontal,
-        #     -self.max_vel_horizontal,
-        #     self.max_vel_horizontal,
-        # )  # Y velocity command
-        # vz_cmd = saturate(
-        #     (carrot[2] - z) * self.p_vertical,
-        #     -self.max_vel_vertical,
-        #     self.max_vel_vertical,
-        # )  # Z velocity command
-        
-        self.pc.go_to(carrot[0], carrot[1], carrot[2], 0.5)
+        #saturate = lambda x, a, b: min(max(x, a), b)
+        self.pc.go_to(carrot[0], carrot[1], carrot[2], 1)
         print("Carrot:", carrot)
         print("Position:", x, y, z)
-        
-        # print("VelCommand:", vx_cmd, vy_cmd, vz_cmd)
+        msg_carrot = PoseStamped()
+        msg_carrot.header.stamp.secs = rospy.Time.now().secs
+        msg_carrot.header.stamp.nsecs = rospy.Time.now().nsecs
+        msg_carrot.header.frame_id = "parent_crazyflie_frame"
+        x = msg_carrot.pose.position.x = carrot[0]
+        y = msg_carrot.pose.position.y = carrot[1]
+        z = msg_carrot.pose.position.z = carrot[2]
+        msg_carrot.pose.orientation.w = 1.0
+        msg_carrot.pose.orientation.x = 0.0
+        msg_carrot.pose.orientation.y = 0.0
+        msg_carrot.pose.orientation.z = 0.0
+        self.carrot_pub.publish(msg_carrot)
         # Link Safety Timer
         self.safetyTimer = Timer(1, self.safetyTimerCallback)
         self.safetyTimer.start()
 
-        # print(msg)
-        # for name, value in data.items():
-        #     rospy.loginfo(f'{name}: {value:3.3f} ')
-        # print("data: ", data)
 
     def _connection_failed(self, link_uri, msg):
         """Callback when connection initial connection fails (i.e no Crazyflie
@@ -238,7 +229,8 @@ class CFLogger:
 
 def reader():
     # Configure ROS node
-    pub = rospy.Publisher("crazyflie2", PoseStamped, queue_size=100)
+    pub = rospy.Publisher("crazyflie", PoseStamped, queue_size=100)
+    carrot_pub = rospy.Publisher("crazyflie_carrot", PoseStamped, queue_size=100)
     rospy.init_node("cf_data_publisher", anonymous=True)
 
     # set rate
@@ -249,10 +241,7 @@ def reader():
     cflib.crtp.init_drivers()
 
     # Create instance of the logging class
-    le = CFLogger(uri, pub)
-
-    # while not rospy.is_shutdown():
-    #     rate.sleep()
+    le = CFLogger(uri, pub,carrot_pub)
 
     rospy.spin()
 

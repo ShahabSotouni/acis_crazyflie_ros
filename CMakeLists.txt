@@ -207,5 +207,8 @@ include_directories(
 
 # Add python scripts
 catkin_install_python(PROGRAMS scripts/read_publish_simple.py
+scripts/read_publish_simple_fake.py
+scripts/circle_and_publish_simple.py
+scripts/carrot_visualizer.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
