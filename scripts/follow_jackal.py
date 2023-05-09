@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-
+import numpy as np
 import rospy
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, TransformStamped
+from nav_msgs.msg import Odometry
+
 
 # Import crazyflie lib
 import time
@@ -13,12 +15,27 @@ from cflib.crazyflie.log import LogConfig
 from cflib.crazyflie.syncCrazyflie import SyncCrazyflie
 from cflib.positioning.position_hl_commander import PositionHlCommander
 from cflib.utils import uri_helper
+from pynput.keyboard import Key, Listener, KeyCode
+from enum import Enum
 
 # Importing math Library
 import math
 
+# Importing carrot_visualizer
+import carrot_visualizer
+
+
+debugFlag = True
+
 # URI to the Crazyflie to connect to
 uri = uri_helper.uri_from_env(default="radio://0/80/2M/E7E7E7E7E7")
+
+
+class FlightMode(Enum):
+    FOLLOW_JACKAL = 1
+    FOLLOW_CARROT = 2
+    LAND = 3
+    IDLE = 4
 
 
 class CarrotGenerator:
@@ -68,11 +85,13 @@ class CFLogger:
     max_vel_horizontal = 0.3
     max_vel_vertical = 0.2
     safetyTimer = None
-
+    mode = FlightMode.IDLE
+    jackal_pose = [0.0, 0.0, 0.0]
     # Get Publisher handle from ROS
 
-    def __init__(self, link_uri, pub,carrot_pub):
+    def __init__(self, link_uri, pub, carrot_pub, plot):
         """Initialize and run the example with the specified link_uri"""
+        self.carrot_plot = plot
         self.pub = pub
         self.carrot_pub = carrot_pub
         self._cf = Crazyflie(rw_cache="./cache")
@@ -84,6 +103,16 @@ class CFLogger:
         self._cf.disconnected.add_callback(self._disconnected)
         self._cf.connection_failed.add_callback(self._connection_failed)
         self._cf.connection_lost.add_callback(self._connection_lost)
+
+        # Print keyboard commands
+        print("Keyboard Commands:")
+        print("i: Idle Mode")
+        print("c: Carrot Mode")
+        print("j: Jackal Mode")
+        print("space: Land")
+
+        self.listener = Listener(on_press=self.on_press, on_release=self.on_release)
+        self.listener.start()
 
         rospy.loginfo("Connecting to %s" % link_uri)
 
@@ -107,17 +136,18 @@ class CFLogger:
 
         # Variable used to keep main loop occupied until disconnect
         self.is_connected = True
+
     # Destructor
     def __del__(self):
         # body of destructor
         rospy.loginfo("Destructor Called! Landing Now!")
         print("Destructor Called! Landing Now!")
         self.pc.land()
-        
+
     def _connected(self, link_uri):
         """This callback is called form the Crazyflie API when a Crazyflie
         has been connected and the TOCs have been downloaded."""
-            
+
         rospy.loginfo("Connected to %s" % link_uri)
 
         # The definition of the logconfig can be made before connecting
@@ -157,17 +187,18 @@ class CFLogger:
 
     def _stab_log_data(self, timestamp, data, logconf):
         """Callback from a the log API when data arrives"""
-        # print("Data Arrived Callback")
+        if debugFlag:
+            print("Data Arrived Callback")
         # print(self.safetyTimer)
         if self.safetyTimer is not None:
             self.safetyTimer.cancel()
-        
+
         # check if rospy is shutdown
         # if rospy.is_shutdown:
         #     print("ROS is shutdown, removing callback and landing")
         #     self._lg_stab.data_received_cb.remove_callback(self._stab_log_data)
         #     self.pc.land()
-        
+
         # print("Data Arrived Callback2")
         # rospy.loginfo(f'[{timestamp}][{logconf.name}]: ')
         msg = PoseStamped()
@@ -178,6 +209,8 @@ class CFLogger:
         x = msg.pose.position.x = data["stateEstimate.x"]
         y = msg.pose.position.y = data["stateEstimate.y"]
         z = msg.pose.position.z = data["stateEstimate.z"]
+        if debugFlag:
+            print(f"x: ", x, "y: ", y, "z: ", z)
         msg.pose.orientation.w = 1.0
         msg.pose.orientation.x = 0.0
         msg.pose.orientation.y = 0.0
@@ -185,26 +218,55 @@ class CFLogger:
         self.pub.publish(msg)
         carrot = self.cg.generate_carrot()
         carrot[2] = carrot[2] + 1.0
-        #saturate = lambda x, a, b: min(max(x, a), b)
-        self.pc.go_to(carrot[0], carrot[1], carrot[2], 1)
-        print("Carrot:", carrot)
-        print("Position:", x, y, z)
         msg_carrot = PoseStamped()
         msg_carrot.header.stamp.secs = rospy.Time.now().secs
         msg_carrot.header.stamp.nsecs = rospy.Time.now().nsecs
         msg_carrot.header.frame_id = "parent_crazyflie_frame"
-        x = msg_carrot.pose.position.x = carrot[0]
-        y = msg_carrot.pose.position.y = carrot[1]
-        z = msg_carrot.pose.position.z = carrot[2]
+        if debugFlag:
+            print(f"mode: {self.mode.name}")
+        if self.mode == FlightMode.FOLLOW_CARROT:
+            xc = carrot[0]
+            yc = carrot[1]
+            zc = carrot[2]
+        elif self.mode == FlightMode.FOLLOW_JACKAL:
+            xc = self.jackal_pose[0]
+            yc = self.jackal_pose[1]
+            zc = 1.0
+        else:
+            xc = 0.0
+            yc = 0.0
+            zc = 0.5
+
+        saturate = lambda x, a, b: min(max(x, a), b)
+        xc = saturate(xc, -1.4, 1.4)
+        yc = saturate(yc, -1.4, 1.4)
+        zc = saturate(zc, 0.5, 1.5)
+
+        msg_carrot.pose.position.x = xc
+        msg_carrot.pose.position.y = yc
+        msg_carrot.pose.position.z = zc
         msg_carrot.pose.orientation.w = 1.0
         msg_carrot.pose.orientation.x = 0.0
         msg_carrot.pose.orientation.y = 0.0
         msg_carrot.pose.orientation.z = 0.0
         self.carrot_pub.publish(msg_carrot)
+
+        if debugFlag:
+            print(f"xc: {xc}, yc: {yc}, zc: {zc}")
+        plot_c = [xc, yc, zc]
+        plot_d = [x, y, z]
+        if debugFlag:
+            print("plot_c: ", plot_c, "plot_d: ", plot_d)
+        # self.carrot_plot.update_plot(plot_c, plot_d)
+        # if debugFlag:
+        #    print("carrot plot updated")
+        if self.mode == FlightMode.LAND:
+            self.pc.land()
+        else:
+            self.pc.go_to(xc, yc, zc, 1)
         # Link Safety Timer
         self.safetyTimer = Timer(1, self.safetyTimerCallback)
         self.safetyTimer.start()
-
 
     def _connection_failed(self, link_uri, msg):
         """Callback when connection initial connection fails (i.e no Crazyflie
@@ -224,13 +286,53 @@ class CFLogger:
 
     def safetyTimerCallback(self):
         rospy.loginfo("Safety Timer Timeout! Landing Now!")
+        self.mode = FlightMode.LAND
         self.pc.land()
+
+    def on_press(self, key):
+        print("{0} pressed".format(key))
+        print("key: ", key)
+        if key == KeyCode.from_char("i") or key == KeyCode.from_char("I"):
+            # Idle Mode
+            print("Idle Mode")
+            self.mode = FlightMode.IDLE
+        elif key == KeyCode.from_char("c") or key == KeyCode.from_char("C"):
+            # Carrot Mode
+            print("Follow Carrot Mode")
+            self.mode = FlightMode.FOLLOW_CARROT
+        elif key == KeyCode.from_char("j") or key == KeyCode.from_char("J"):
+            # Jackal Mode
+            print("Follow Jackal Mode")
+            self.mode = FlightMode.FOLLOW_JACKAL
+        elif key == Key.space:
+            # Land
+            self.mode = FlightMode.LAND
+            print("Land")
+            self.pc.land()
+
+    def on_release(self, key):
+        print("{0} release".format(key))
+        if key == Key.esc:
+            # Stop listener
+            return False
+
+    def jackal_callback(self, data):
+        self.jackal_pose[0] = 2.50 - data.pose.pose.position.x
+        self.jackal_pose[1] = -data.pose.pose.position.y
+        if debugFlag:
+            print("jackal_pose: ", self.jackal_pose)
+    def jackal_callback_tf(self, data):
+        self.jackal_pose[0] = 2.50 - data.transform.translation.x
+        self.jackal_pose[1] = -data.transform.translation.x
+        if debugFlag:
+            print("jackal_pose_tf: ", self.jackal_pose)
 
 
 def reader():
     # Configure ROS node
     pub = rospy.Publisher("crazyflie", PoseStamped, queue_size=100)
     carrot_pub = rospy.Publisher("crazyflie_carrot", PoseStamped, queue_size=100)
+
     rospy.init_node("cf_data_publisher", anonymous=True)
 
     # set rate
@@ -240,8 +342,13 @@ def reader():
     rospy.loginfo("Initializing drivers")
     cflib.crtp.init_drivers()
 
+    carrot_plot = carrot_visualizer.CarrotVisualizer()
+
     # Create instance of the logging class
-    le = CFLogger(uri, pub,carrot_pub)
+    le = CFLogger(uri, pub, carrot_pub, carrot_plot)
+
+    # jackal_sub = rospy.Subscriber("/odometry/filtered", Odometry, le.jackal_callback)
+    jackal_sub_tf = rospy.Subscriber("/tf_echo", TransformStamped, le.jackal_callback_tf)
 
     rospy.spin()
 
@@ -249,6 +356,7 @@ def reader():
     le._cf.close_link()
     while le.is_connected:
         time.sleep(1)
+    le.listener.stop()
 
 
 if __name__ == "__main__":
