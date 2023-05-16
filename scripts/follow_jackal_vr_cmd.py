@@ -3,6 +3,7 @@ import numpy as np
 import rospy
 from geometry_msgs.msg import PoseStamped, TransformStamped
 from nav_msgs.msg import Odometry
+from std_msgs.msg import String as RosStringMsg
 
 
 # Import crazyflie lib
@@ -85,7 +86,8 @@ class CFLogger:
     max_vel_horizontal = 0.3
     max_vel_vertical = 0.2
     safetyTimer = None
-    mode = FlightMode.IDLE
+    mode = FlightMode.LAND
+    lastmode = FlightMode.LAND
     jackal_pose = [0.0, 0.0, 0.0]
     # Get Publisher handle from ROS
 
@@ -131,7 +133,9 @@ class CFLogger:
         )
         rospy.loginfo("waiting for 10 seconds before starting the motion")
         rospy.sleep(10)
-        self.pc.take_off(0.5, 0.2)
+        self.pc.take_off(1.5, 0.2)
+        self.mode = FlightMode.IDLE
+        self.lastmode = FlightMode.IDLE
         rospy.loginfo("TakeOff!")
         
         # Variable used to keep main loop occupied until disconnect
@@ -193,6 +197,9 @@ class CFLogger:
         if self.safetyTimer is not None:
             self.safetyTimer.cancel()
 
+        if self.mode is not FlightMode.LAND and self.lastmode is FlightMode.LAND:
+            self.pc.take_off(1.5, 0.2)
+        self.lastmode = self.mode
         # check if rospy is shutdown
         # if rospy.is_shutdown:
         #     print("ROS is shutdown, removing callback and landing")
@@ -327,11 +334,25 @@ class CFLogger:
         if debugFlag:
             print("jackal_pose_tf: ", self.jackal_pose)
     def vr_callback(self, data):
-        self.jackal_pose[0] = 2.50 - data.transform.translation.x
-        self.jackal_pose[1] = -data.transform.translation.x
+        if data.data == "Idle":
+            # Idle Mode
+            print("VR Command Idle Mode")
+            self.mode = FlightMode.IDLE
+        elif data.data == "Circle":
+            # Carrot Mode
+            print("VR Command Follow Carrot Mode")
+            self.mode = FlightMode.FOLLOW_CARROT
+        elif data.data == "Follow Jackal":
+            # Jackal Mode
+            print("VR Command Follow Jackal Mode")
+            self.mode = FlightMode.FOLLOW_JACKAL
+        elif data.data == "Land":
+            # Land
+            self.mode = FlightMode.LAND
+            print("VR Command Land")
+            self.pc.land()
         if debugFlag:
-            print("jackal_pose_tf: ", self.jackal_pose)
-
+            print("VR Command: ", data)
 
 def reader():
     # Configure ROS node
@@ -355,7 +376,7 @@ def reader():
     jackal_sub = rospy.Subscriber("/odometry/filtered", Odometry, le.jackal_callback)
     # jackal_sub_tf = rospy.Subscriber("/tf_echo", TransformStamped, le.jackal_callback_tf)
     
-    vr_sub = rospy.Subscriber("/odometry/filtered", Odometry, le.jackal_callback)
+    vr_sub = rospy.Subscriber("/unity_drone", RosStringMsg, le.vr_callback)
 
     rospy.spin()
 
