@@ -131,12 +131,6 @@ class CFLogger:
             default_height=0.5,
             controller=PositionHlCommander.CONTROLLER_PID,
         )
-        rospy.loginfo("waiting for 10 seconds before starting the motion")
-        rospy.sleep(10)
-        self.pc.take_off(1.5, 0.2)
-        self.mode = FlightMode.IDLE
-        self.lastmode = FlightMode.IDLE
-        rospy.loginfo("TakeOff!")
         
         # Variable used to keep main loop occupied until disconnect
         self.is_connected = True
@@ -199,6 +193,7 @@ class CFLogger:
 
         if self.mode is not FlightMode.LAND and self.lastmode is FlightMode.LAND:
             self.pc.take_off(1.5, 0.2)
+        
         self.lastmode = self.mode
         # check if rospy is shutdown
         # if rospy.is_shutdown:
@@ -377,6 +372,12 @@ def reader():
     # jackal_sub_tf = rospy.Subscriber("/tf_echo", TransformStamped, le.jackal_callback_tf)
     
     vr_sub = rospy.Subscriber("/unity_drone", RosStringMsg, le.vr_callback)
+    
+    rospy.loginfo("waiting for 5 seconds before starting the motion")
+    rospy.sleep(5)
+    le.mode = FlightMode.IDLE
+    rospy.loginfo("TakeOff!")
+        
 
     rospy.spin()
 
