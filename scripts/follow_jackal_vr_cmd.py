@@ -4,7 +4,7 @@ import rospy
 from geometry_msgs.msg import PoseStamped, TransformStamped
 from nav_msgs.msg import Odometry
 from std_msgs.msg import String as RosStringMsg
-
+import os
 
 # Import crazyflie lib
 import time
@@ -25,7 +25,7 @@ import math
 # Importing carrot_visualizer
 import carrot_visualizer
 
-
+clear = lambda: os.system('clear')
 debugFlag = True
 
 # URI to the Crazyflie to connect to
@@ -184,7 +184,9 @@ class CFLogger:
         rospy.loginfo("Error when logging %s: %s" % (logconf.name, msg))
 
     def _stab_log_data(self, timestamp, data, logconf):
+        
         """Callback from a the log API when data arrives"""
+        clear();
         if debugFlag:
             print("Data Arrived Callback")
         # print(self.safetyTimer)
@@ -192,7 +194,7 @@ class CFLogger:
             self.safetyTimer.cancel()
 
         if self.mode is not FlightMode.LAND and self.lastmode is FlightMode.LAND:
-            self.pc.take_off(1.5, 0.2)
+            self.pc.take_off(0.5, 0.2)
         
         self.lastmode = self.mode
         # check if rospy is shutdown
@@ -255,10 +257,10 @@ class CFLogger:
 
         if debugFlag:
             print(f"xc: {xc}, yc: {yc}, zc: {zc}")
-        plot_c = [xc, yc, zc]
-        plot_d = [x, y, z]
-        if debugFlag:
-            print("plot_c: ", plot_c, "plot_d: ", plot_d)
+        # plot_c = [xc, yc, zc]
+        # plot_d = [x, y, z]
+        # if debugFlag:
+        #     print("plot_c: ", plot_c, "plot_d: ", plot_d)
         # self.carrot_plot.update_plot(plot_c, plot_d)
         # if debugFlag:
         #    print("carrot plot updated")
@@ -319,8 +321,8 @@ class CFLogger:
             return False
 
     def jackal_callback(self, data):
-        self.jackal_pose[0] = 2.50 - data.pose.pose.position.x
-        self.jackal_pose[1] = -data.pose.pose.position.y
+        self.jackal_pose[0] = 2.50 - 2*data.pose.pose.position.x
+        self.jackal_pose[1] = -2*data.pose.pose.position.y
         if debugFlag:
             print("jackal_pose: ", self.jackal_pose)
     def jackal_callback_tf(self, data):
@@ -368,15 +370,17 @@ def reader():
     # Create instance of the logging class
     le = CFLogger(uri, pub, carrot_pub, carrot_plot)
 
-    jackal_sub = rospy.Subscriber("/odometry/filtered", Odometry, le.jackal_callback)
+    #jackal_sub = rospy.Subscriber("/odometry/filtered", Odometry, le.jackal_callback)
+    jackal_sub_2 = rospy.Subscriber("/unity_jackal/position", Odometry, le.jackal_callback)
     # jackal_sub_tf = rospy.Subscriber("/tf_echo", TransformStamped, le.jackal_callback_tf)
+    
     
     vr_sub = rospy.Subscriber("/unity_drone", RosStringMsg, le.vr_callback)
     
-    rospy.loginfo("waiting for 5 seconds before starting the motion")
-    rospy.sleep(5)
-    le.mode = FlightMode.IDLE
-    rospy.loginfo("TakeOff!")
+    # rospy.loginfo("waiting for 5 seconds before starting the motion")
+    # rospy.sleep(5)
+    # le.mode = FlightMode.IDLE
+    # rospy.loginfo("TakeOff!")
         
 
     rospy.spin()
