@@ -149,13 +149,13 @@ class CFLogger:
         rospy.loginfo("Connected to %s" % link_uri)
 
         # The definition of the logconfig can be made before connecting
-        self._lg_stab = LogConfig(name="Stabilizer", period_in_ms=50)
+        self._lg_stab = LogConfig(name="Stabilizer", period_in_ms=100)
         self._lg_stab.add_variable("stateEstimate.x", "float")
         self._lg_stab.add_variable("stateEstimate.y", "float")
         self._lg_stab.add_variable("stateEstimate.z", "float")
-        self._lg_stab.add_variable("stabilizer.roll", "float")
-        self._lg_stab.add_variable("stabilizer.pitch", "float")
-        self._lg_stab.add_variable("stabilizer.yaw", "float")
+        # self._lg_stab.add_variable("stabilizer.roll", "float")
+        # self._lg_stab.add_variable("stabilizer.pitch", "float")
+        # self._lg_stab.add_variable("stabilizer.yaw", "float")
         # The fetch-as argument can be set to FP16 to save space in the log packet
         self._lg_stab.add_variable("pm.vbat", "FP16")
 
@@ -163,6 +163,7 @@ class CFLogger:
         # connected, since we need to check that the variables we
         # would like to log are in the TOC.
         try:
+            # self._cf.log.reset()
             self._cf.log.add_config(self._lg_stab)
             # This callback will receive the data
             self._lg_stab.data_received_cb.add_callback(self._stab_log_data)
@@ -213,8 +214,9 @@ class CFLogger:
         x = msg.pose.position.x = data["stateEstimate.x"]
         y = msg.pose.position.y = data["stateEstimate.y"]
         z = msg.pose.position.z = data["stateEstimate.z"]
+        vbat = data["pm.vbat"]
         if debugFlag:
-            print(f"x: ", x, "y: ", y, "z: ", z)
+            print(f"x: ", "%.2f" %x, "y: ", "%.2f" %y, "z: ", "%.2f" %z, "vbat: ", "%.2f" %vbat)
         msg.pose.orientation.w = 1.0
         msg.pose.orientation.x = 0.0
         msg.pose.orientation.y = 0.0
@@ -256,7 +258,7 @@ class CFLogger:
         self.carrot_pub.publish(msg_carrot)
 
         if debugFlag:
-            print(f"xc: {xc}, yc: {yc}, zc: {zc}")
+            print(f"xc: ", "%.2f" %xc, "yc: ", "%.2f" %yc, "zc: ", "%.2f" %zc)
         # plot_c = [xc, yc, zc]
         # plot_d = [x, y, z]
         # if debugFlag:
